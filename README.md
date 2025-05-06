@@ -2,7 +2,9 @@
 
 A sleek and modern **news aggregator SPA** built with **React**, **Vite**, and **Tailwind CSS**, fetching real-time articles from the [GNews API](https://gnews.io/).
 
-Live Demo: _Coming soon or add link here if hosted_
+## 🌐 Live Demo
+
+🔗 [Check it out here](https://newsaggregatorai.netlify.app/)
 
 ---
 
