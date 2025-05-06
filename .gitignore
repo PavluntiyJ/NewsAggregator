@@ -1,0 +1,21 @@
+# Node.js
+node_modules/
+dist/
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.sw?
+*.sass-cache
+.env
+
+# Local Netlify folder
+.netlify
