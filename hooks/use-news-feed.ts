@@ -4,6 +4,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { NewsRequestError, TERMINAL_ERROR_CODES, fetchNewsPage } from "@/lib/api-client";
+import { dedupeArticles } from "@/lib/articles";
 import type { NewsQuery } from "@/lib/news-query";
 import type { Article } from "@/lib/types";
 
@@ -35,23 +36,10 @@ export function useNewsFeed(params: Omit<NewsQuery, "page">) {
     },
   });
 
-  const articles = useMemo<Article[]>(() => {
-    const pages = query.data?.pages ?? [];
-    const seen = new Set<string>();
-    const flattened: Article[] = [];
-
-    // Upstream can repeat an article across page boundaries; de-duplicate so
-    // React keys stay unique.
-    for (const page of pages) {
-      for (const article of page.articles) {
-        if (seen.has(article.id)) continue;
-        seen.add(article.id);
-        flattened.push(article);
-      }
-    }
-
-    return flattened;
-  }, [query.data]);
+  const articles = useMemo<Article[]>(
+    () => dedupeArticles(query.data?.pages ?? []),
+    [query.data],
+  );
 
   const firstPage = query.data?.pages[0];
 
