@@ -12,7 +12,7 @@ describe("parseNewsQuery", () => {
     expect(parse("")).toEqual({
       q: DEFAULT_QUERY,
       page: 1,
-      pageSize: 12,
+      pageSize: 10,
       sort: "publishedAt",
       lang: "en",
       country: "any",
@@ -20,10 +20,10 @@ describe("parseNewsQuery", () => {
   });
 
   it("reads valid values", () => {
-    expect(parse("q=quantum&page=3&pageSize=20&sort=relevance&lang=de&country=us")).toEqual({
+    expect(parse("q=quantum&page=3&pageSize=10&sort=relevance&lang=de&country=us")).toEqual({
       q: "quantum",
       page: 3,
-      pageSize: 20,
+      pageSize: 10,
       sort: "relevance",
       lang: "de",
       country: "us",
@@ -42,7 +42,7 @@ describe("parseNewsQuery", () => {
 
   it("clamps paging to the upstream limit", () => {
     expect(parse(`page=${MAX_PAGE + 50}`).page).toBe(1);
-    expect(parse("pageSize=9999").pageSize).toBe(12);
+    expect(parse("pageSize=9999").pageSize).toBe(10);
   });
 
   it("trims whitespace and rejects an empty search term", () => {
@@ -56,7 +56,7 @@ describe("serializeNewsQuery", () => {
     const params = serializeNewsQuery({
       q: DEFAULT_QUERY,
       page: 1,
-      pageSize: 12,
+      pageSize: 10,
       sort: "publishedAt",
       lang: "en",
       country: "any",
@@ -74,7 +74,7 @@ describe("serializeNewsQuery", () => {
   });
 
   it("round-trips through parseNewsQuery", () => {
-    const original = parse("q=fusion&sort=relevance&lang=fr&country=ca&pageSize=20");
+    const original = parse("q=fusion&sort=relevance&lang=fr&country=ca&pageSize=5");
     const restored = parseNewsQuery(serializeNewsQuery(original));
 
     expect(restored).toEqual(original);

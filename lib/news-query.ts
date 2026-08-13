@@ -3,12 +3,29 @@ import { COUNTRIES, DEFAULT_QUERY, LANGUAGES, SORT_OPTIONS } from "@/lib/types";
 
 /** GNews caps free-tier paging; going past this only ever returns errors. */
 export const MAX_PAGE = 10;
-export const MAX_PAGE_SIZE = 25;
+
+/**
+ * The free tier silently clamps `max` to 10.
+ *
+ * It does not error on a larger value — it returns 10 articles and says
+ * nothing, which is worse: any downstream code comparing the number of
+ * articles received against the number requested then concludes the results
+ * are exhausted. Asking for more than the tier allows is therefore never
+ * harmless, so the schema refuses to.
+ */
+export const MAX_PAGE_SIZE = 10;
+export const DEFAULT_PAGE_SIZE = 10;
 
 export const newsQuerySchema = z.object({
   q: z.string().trim().min(1).max(120).catch(DEFAULT_QUERY).default(DEFAULT_QUERY),
   page: z.coerce.number().int().min(1).max(MAX_PAGE).catch(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).catch(12).default(12),
+  pageSize: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_PAGE_SIZE)
+    .catch(DEFAULT_PAGE_SIZE)
+    .default(DEFAULT_PAGE_SIZE),
   sort: z.enum(SORT_OPTIONS).catch("publishedAt").default("publishedAt"),
   lang: z.enum(LANGUAGES).catch("en").default("en"),
   country: z.enum(COUNTRIES).catch("any").default("any"),

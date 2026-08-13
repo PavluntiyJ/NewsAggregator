@@ -191,22 +191,30 @@ export async function fetchNews(query: NewsQuery): Promise<NewsPage> {
     );
   }
 
-  const articles = (payload.articles ?? [])
+  const rows = payload.articles ?? [];
+  const articles = rows
     .map(normalizeArticle)
     .filter((article): article is Article => article !== null);
 
   const totalArticles = payload.totalArticles ?? articles.length;
-  const consumed = (query.page - 1) * query.pageSize + articles.length;
+
+  // Paging is reasoned about in the upstream's terms — how many rows it sent,
+  // not how many survived normalization. Two failure modes come from getting
+  // this wrong, and both silently truncate the feed:
+  //
+  //   - Dropping one malformed row would make a full page look partial.
+  //   - The free tier clamps `max` to 10 without saying so, so comparing the
+  //     row count against the requested pageSize can never match.
+  //
+  // Asking "did upstream send anything, and is there more left?" avoids both.
+  const consumed = (query.page - 1) * query.pageSize + rows.length;
 
   return {
     articles,
     totalArticles,
     page: query.page,
     pageSize: query.pageSize,
-    hasMore:
-      articles.length === query.pageSize &&
-      consumed < totalArticles &&
-      query.page < MAX_PAGE,
+    hasMore: rows.length > 0 && consumed < totalArticles && query.page < MAX_PAGE,
     demo: false,
   };
 }

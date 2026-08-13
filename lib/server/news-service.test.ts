@@ -202,7 +202,60 @@ describe("fetchNews against the upstream API", () => {
       ),
     );
 
-    const page = await fetchNews(query("pageSize=12"));
+    const page = await fetchNews(query("pageSize=10"));
+
+    expect(page.hasMore).toBe(false);
+  });
+
+  it("keeps paging when a row is dropped by normalization", async () => {
+    // Regression: hasMore used to compare the normalized article count against
+    // the requested pageSize, so a single malformed row made a full page look
+    // partial and silently ended the feed.
+    const rows = [
+      ...Array.from({ length: 9 }, (_, i) => ({
+        ...UPSTREAM_ARTICLE,
+        url: `https://example.com/a${i}`,
+      })),
+      { title: "No URL, will be dropped" },
+    ];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ totalArticles: 50, articles: rows })),
+    );
+
+    const page = await fetchNews(query("pageSize=10"));
+
+    expect(page.articles).toHaveLength(9);
+    expect(page.hasMore).toBe(true);
+  });
+
+  it("keeps paging when upstream returns fewer articles than requested", async () => {
+    // Regression: the GNews free tier clamps `max` to 10 without erroring, so
+    // requesting more used to make every first page look like the last one.
+    const rows = Array.from({ length: 10 }, (_, i) => ({
+      ...UPSTREAM_ARTICLE,
+      url: `https://example.com/b${i}`,
+    }));
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ totalArticles: 500, articles: rows })),
+    );
+
+    const page = await fetchNews(query("pageSize=10"));
+
+    expect(page.articles).toHaveLength(10);
+    expect(page.hasMore).toBe(true);
+  });
+
+  it("stops paging when upstream returns nothing at all", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ totalArticles: 500, articles: [] })),
+    );
+
+    const page = await fetchNews(query("page=3&pageSize=10"));
 
     expect(page.hasMore).toBe(false);
   });
