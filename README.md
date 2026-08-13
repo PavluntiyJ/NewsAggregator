@@ -6,6 +6,8 @@ An installable, offline-capable news reader. Instant search with URL-addressable
 state, infinite feed, bookmarks, and a command palette — built on Next.js 16,
 React 19 and TypeScript.
 
+**[Live demo →](https://news-aggregator-one-phi.vercel.app)**
+
 > **Try it without signing up for anything:** `npm install && npm run dev`.
 > With no API key configured the app runs against local fixtures, and every
 > feature — search, filters, paging, bookmarks, offline — behaves exactly as it
