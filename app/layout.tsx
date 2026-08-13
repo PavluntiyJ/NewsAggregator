@@ -20,7 +20,14 @@ const serif = Source_Serif_4({
   display: "swap",
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+// Vercel injects VERCEL_PROJECT_PRODUCTION_URL at build time, so link previews
+// resolve correctly on a deployment without anyone having to remember to set
+// NEXT_PUBLIC_SITE_URL by hand.
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "http://localhost:3000");
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
