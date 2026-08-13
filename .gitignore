@@ -1,21 +1,41 @@
-# Node.js
+# dependencies
 node_modules/
-dist/
+.pnp
+.pnp.js
+
+# next.js
+.next/
+out/
+build/
+next-env.d.ts
+
+# testing
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# env
 .env
 .env.local
-.env.development
-.env.test
-.env.production
-.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# IDE
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+
+# editors
 .idea/
 .vscode/
 *.suo
 *.ntvs*
 *.sw?
-*.sass-cache
-.env
 
-# Local Netlify folder
-.netlify
+# os
+.DS_Store
+Thumbs.db
