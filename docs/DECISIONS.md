@@ -156,6 +156,34 @@ settings — those are what stop the optimiser serving active content.
 
 ---
 
+## ADR-011 — Paging is reasoned about in the upstream's terms
+
+**Decision.** `pageSize` is capped at 10 by the schema, and `hasMore` is derived
+from how many rows the upstream sent, never from how many survived
+normalisation or from how many we asked for.
+
+**Rejected.** The obvious `articles.length === pageSize` test for "was this page
+full?".
+
+**Consequences.** That test is wrong in two ways at once, and both silently
+truncate the feed rather than failing loudly:
+
+  - The free tier clamps `max` to 10 and *does not error* on a larger value. A
+    default `pageSize` of 12 therefore received 10 articles, compared them
+    against 12, concluded the results were exhausted, and told the reader
+    "That's everything for this search" after the first page. This shipped, and
+    was only caught by querying the live deployment during an audit — fixtures
+    return exactly what they are asked for, so no test could see it.
+  - Dropping a single malformed row made a full page look partial, with the
+    same result.
+
+Neither is reachable from demo mode, which is a real limitation of the fixture
+strategy in ADR-002: fixtures model the API's contract, not its undocumented
+behaviour. Boundary conditions that depend on what the upstream actually does
+need to be checked against the upstream.
+
+---
+
 ## ADR-010 — Article images fall back to a painted placeholder
 
 **Decision.** `components/article-image.tsx` renders a deterministic low-chroma

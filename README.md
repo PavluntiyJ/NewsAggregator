@@ -59,7 +59,7 @@ the previous page while it refreshes behind the scenes.
 |---|---|
 | **Instant search** | Single properly-cancelled debounce; superseded requests are aborted, so a slow response can never overwrite a newer one |
 | **URL as state** | Query, sort, language and country all live in the URL — every view is shareable and the back button works |
-| **Infinite feed** | `IntersectionObserver` sentinel with a screenful of lead time, de-duplicated across page boundaries |
+| **Infinite feed** | `IntersectionObserver` sentinel with a screenful of lead time, de-duplicated across page boundaries and across syndicated copies of the same story |
 | **Bookmarks** | Persisted locally, synced across tabs, with undo on every destructive action |
 | **Command palette** | `⌘K` / `Ctrl+K` — search, categories, recent searches, navigation, theme |
 | **Offline** | Service worker: network-first for news, cache-first for images, cached shell for navigations |
@@ -89,6 +89,13 @@ GNEWS_API_KEY=your_key_here
 ```
 
 Note the absent `NEXT_PUBLIC_` prefix — that is the point.
+
+**A caveat about the free plan.** It serves 10 articles per request and does not
+accept the `page` parameter at all — it refuses paged requests with a 429. So on
+a free key the feed is one screen of ten articles deep, and the infinite scroll
+has nothing further to load. The code handles this rather than pretending
+otherwise: a paging refusal past the first page ends the feed quietly instead of
+showing an error, and full depth works unchanged on a paid key or in demo mode.
 
 ### Scripts
 

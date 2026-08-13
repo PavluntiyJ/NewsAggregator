@@ -202,7 +202,83 @@ describe("fetchNews against the upstream API", () => {
       ),
     );
 
-    const page = await fetchNews(query("pageSize=12"));
+    const page = await fetchNews(query("pageSize=10"));
+
+    expect(page.hasMore).toBe(false);
+  });
+
+  it("keeps paging when a row is dropped by normalization", async () => {
+    // Regression: hasMore used to compare the normalized article count against
+    // the requested pageSize, so a single malformed row made a full page look
+    // partial and silently ended the feed.
+    const rows = [
+      ...Array.from({ length: 9 }, (_, i) => ({
+        ...UPSTREAM_ARTICLE,
+        url: `https://example.com/a${i}`,
+      })),
+      { title: "No URL, will be dropped" },
+    ];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ totalArticles: 50, articles: rows })),
+    );
+
+    const page = await fetchNews(query("pageSize=10"));
+
+    expect(page.articles).toHaveLength(9);
+    expect(page.hasMore).toBe(true);
+  });
+
+  it("keeps paging when upstream returns fewer articles than requested", async () => {
+    // Regression: the GNews free tier clamps `max` to 10 without erroring, so
+    // requesting more used to make every first page look like the last one.
+    const rows = Array.from({ length: 10 }, (_, i) => ({
+      ...UPSTREAM_ARTICLE,
+      url: `https://example.com/b${i}`,
+    }));
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ totalArticles: 500, articles: rows })),
+    );
+
+    const page = await fetchNews(query("pageSize=10"));
+
+    expect(page.articles).toHaveLength(10);
+    expect(page.hasMore).toBe(true);
+  });
+
+  it("ends the feed quietly when paging is refused past page one", async () => {
+    // The free plan refuses the `page` parameter with a 429. Surfacing that as
+    // an error would replace a working screen of articles with a red banner the
+    // moment the reader scrolls.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 429 })));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const page = await fetchNews(query("page=2"));
+
+    expect(page.articles).toEqual([]);
+    expect(page.hasMore).toBe(false);
+  });
+
+  it("still surfaces a rate limit on the first page", async () => {
+    // Page one is different: there is nothing on screen to preserve, so the
+    // reader has to be told why.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 429 })));
+
+    await expect(fetchNews(query("page=1"))).rejects.toMatchObject({
+      code: "rate_limited",
+    });
+  });
+
+  it("stops paging when upstream returns nothing at all", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ totalArticles: 500, articles: [] })),
+    );
+
+    const page = await fetchNews(query("page=3&pageSize=10"));
 
     expect(page.hasMore).toBe(false);
   });

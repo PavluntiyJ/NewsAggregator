@@ -174,10 +174,36 @@ export async function fetchNews(query: NewsQuery): Promise<NewsPage> {
   if (!response.ok) {
     const retryAfterHeader = response.headers.get("retry-after");
     const retryAfter = retryAfterHeader ? Number(retryAfterHeader) : undefined;
-    throw mapUpstreamStatus(
+    const error = mapUpstreamStatus(
       response.status,
       Number.isFinite(retryAfter) ? retryAfter : undefined,
     );
+
+    // The free plan does not serve the `page` parameter and refuses it with a
+    // 429 — verified against the live API, where a brand-new query returns page
+    // one fine and is refused for page two. To a reader, "we cannot fetch more"
+    // and "there is nothing more" are the same thing, so a failure past the
+    // first page ends the feed quietly rather than replacing a working screen
+    // of articles with an error. A first-page failure is still surfaced,
+    // because there the reader has nothing at all.
+    if (
+      query.page > 1 &&
+      (error.code === "rate_limited" || error.code === "quota_exceeded")
+    ) {
+      console.warn(
+        `[news] paging refused upstream (HTTP ${response.status}); ending feed after page ${query.page - 1}`,
+      );
+      return {
+        articles: [],
+        totalArticles: 0,
+        page: query.page,
+        pageSize: query.pageSize,
+        hasMore: false,
+        demo: false,
+      };
+    }
+
+    throw error;
   }
 
   let payload: GNewsResponse;
@@ -191,22 +217,30 @@ export async function fetchNews(query: NewsQuery): Promise<NewsPage> {
     );
   }
 
-  const articles = (payload.articles ?? [])
+  const rows = payload.articles ?? [];
+  const articles = rows
     .map(normalizeArticle)
     .filter((article): article is Article => article !== null);
 
   const totalArticles = payload.totalArticles ?? articles.length;
-  const consumed = (query.page - 1) * query.pageSize + articles.length;
+
+  // Paging is reasoned about in the upstream's terms — how many rows it sent,
+  // not how many survived normalization. Two failure modes come from getting
+  // this wrong, and both silently truncate the feed:
+  //
+  //   - Dropping one malformed row would make a full page look partial.
+  //   - The free tier clamps `max` to 10 without saying so, so comparing the
+  //     row count against the requested pageSize can never match.
+  //
+  // Asking "did upstream send anything, and is there more left?" avoids both.
+  const consumed = (query.page - 1) * query.pageSize + rows.length;
 
   return {
     articles,
     totalArticles,
     page: query.page,
     pageSize: query.pageSize,
-    hasMore:
-      articles.length === query.pageSize &&
-      consumed < totalArticles &&
-      query.page < MAX_PAGE,
+    hasMore: rows.length > 0 && consumed < totalArticles && query.page < MAX_PAGE,
     demo: false,
   };
 }
