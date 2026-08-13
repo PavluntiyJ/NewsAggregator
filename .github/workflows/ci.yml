@@ -118,9 +118,34 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Smoke-test the deployment
+        # Deliberately not steps.deploy.outputs.url: that is the immutable
+        # per-deployment hostname, which Vercel's Deployment Protection puts
+        # behind auth and answers with a 302. The public alias is what readers
+        # actually hit, so that is what is worth checking.
+        env:
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://news-aggregator-one-phi.vercel.app' }}
         run: |
           set -euo pipefail
-          url="${{ steps.deploy.outputs.url }}"
-          status=$(curl -s -o /dev/null -w '%{http_code}' "$url/api/news?q=technology")
-          echo "GET $url/api/news -> $status"
+          echo "Deployed: ${{ steps.deploy.outputs.url }}"
+          echo "Checking:  $PRODUCTION_URL"
+
+          status=$(curl -sS -o /tmp/smoke.json -w '%{http_code}' \
+            "$PRODUCTION_URL/api/news?q=technology")
+          echo "GET /api/news -> $status"
           [ "$status" = "200" ]
+
+          # A 200 carrying an error envelope still means the deployment is not
+          # serving news, so check the payload rather than just the status.
+          node -e '
+            const body = require("fs").readFileSync("/tmp/smoke.json", "utf8");
+            const data = JSON.parse(body);
+            if (data.error) {
+              console.error("Upstream error:", data.error.code, "-", data.error.message);
+              process.exit(1);
+            }
+            if (!Array.isArray(data.articles)) {
+              console.error("Malformed payload: no articles array");
+              process.exit(1);
+            }
+            console.log(`OK: ${data.articles.length} articles, demo=${data.demo}`);
+          '
