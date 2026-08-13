@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="The Feed">
+  <rect width="512" height="512" fill="#c2410c"/>
+  <g fill="none" stroke="#fbf9f6" stroke-width="24" stroke-linecap="round">
+    <path d="M162 186h140"/>
+    <path d="M162 246h188"/>
+    <path d="M162 306h188"/>
+    <path d="M162 366h140"/>
+  </g>
+  <circle cx="342" cy="186" r="26" fill="#fbf9f6"/>
+</svg>
