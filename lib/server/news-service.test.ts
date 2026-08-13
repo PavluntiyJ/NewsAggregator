@@ -249,6 +249,29 @@ describe("fetchNews against the upstream API", () => {
     expect(page.hasMore).toBe(true);
   });
 
+  it("ends the feed quietly when paging is refused past page one", async () => {
+    // The free plan refuses the `page` parameter with a 429. Surfacing that as
+    // an error would replace a working screen of articles with a red banner the
+    // moment the reader scrolls.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 429 })));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const page = await fetchNews(query("page=2"));
+
+    expect(page.articles).toEqual([]);
+    expect(page.hasMore).toBe(false);
+  });
+
+  it("still surfaces a rate limit on the first page", async () => {
+    // Page one is different: there is nothing on screen to preserve, so the
+    // reader has to be told why.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 429 })));
+
+    await expect(fetchNews(query("page=1"))).rejects.toMatchObject({
+      code: "rate_limited",
+    });
+  });
+
   it("stops paging when upstream returns nothing at all", async () => {
     vi.stubGlobal(
       "fetch",

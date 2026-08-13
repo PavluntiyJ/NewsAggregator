@@ -174,10 +174,36 @@ export async function fetchNews(query: NewsQuery): Promise<NewsPage> {
   if (!response.ok) {
     const retryAfterHeader = response.headers.get("retry-after");
     const retryAfter = retryAfterHeader ? Number(retryAfterHeader) : undefined;
-    throw mapUpstreamStatus(
+    const error = mapUpstreamStatus(
       response.status,
       Number.isFinite(retryAfter) ? retryAfter : undefined,
     );
+
+    // The free plan does not serve the `page` parameter and refuses it with a
+    // 429 — verified against the live API, where a brand-new query returns page
+    // one fine and is refused for page two. To a reader, "we cannot fetch more"
+    // and "there is nothing more" are the same thing, so a failure past the
+    // first page ends the feed quietly rather than replacing a working screen
+    // of articles with an error. A first-page failure is still surfaced,
+    // because there the reader has nothing at all.
+    if (
+      query.page > 1 &&
+      (error.code === "rate_limited" || error.code === "quota_exceeded")
+    ) {
+      console.warn(
+        `[news] paging refused upstream (HTTP ${response.status}); ending feed after page ${query.page - 1}`,
+      );
+      return {
+        articles: [],
+        totalArticles: 0,
+        page: query.page,
+        pageSize: query.pageSize,
+        hasMore: false,
+        demo: false,
+      };
+    }
+
+    throw error;
   }
 
   let payload: GNewsResponse;
