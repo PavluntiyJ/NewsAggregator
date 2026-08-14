@@ -2,39 +2,64 @@
 /**
  * Service worker for The Feed.
  *
- * Three caching strategies, one per kind of request:
+ * Four caching strategies, one per kind of request:
  *
- *   navigations  → network-first, falling back to the cached shell when offline
- *   /api/news    → network-first, falling back to the last successful response
- *   images       → cache-first with a bounded cache
+ *   navigations    → network-first, falling back to the cached shell when offline
+ *   /_next/static  → cache-first; these are content-hashed and immutable
+ *   /api/news      → network-first, falling back to the last successful response
+ *   images         → cache-first with a bounded cache
  *
  * Network-first (rather than cache-first) for news is deliberate: stale
  * headlines presented as current would be worse than a brief spinner.
  */
 
-const VERSION = "v2.0.0";
+/**
+ * Cache namespaces are stamped with the deployment that created them.
+ *
+ * The registrar appends `?v=<build id>`, so a new deployment gets a new worker
+ * URL and a new set of cache names, and `activate` deletes everything that does
+ * not match. A hand-maintained constant could not do this: it only changed when
+ * someone remembered to change it, so a response cached by one deployment was
+ * served to a later one whose code expected a different shape.
+ */
+const VERSION = new URL(self.location.href).searchParams.get("v") || "dev";
 const SHELL_CACHE = `shell-${VERSION}`;
+const STATIC_CACHE = `static-${VERSION}`;
 const DATA_CACHE = `data-${VERSION}`;
 const IMAGE_CACHE = `images-${VERSION}`;
 
-const SHELL_ASSETS = ["/", "/bookmarks", "/icons/icon.svg"];
+/**
+ * Without the document there is no shell, so failing to cache it must fail the
+ * install. The alternative — a worker that activates anyway — is worse than no
+ * worker at all: it claims the page and then has nothing to serve.
+ */
+const REQUIRED_SHELL_ASSETS = ["/"];
+
+/** Nice to have offline. A 404 on any of these must not block the install. */
+const OPTIONAL_SHELL_ASSETS = ["/bookmarks", "/icons/icon.svg"];
+
 const MAX_IMAGE_ENTRIES = 60;
+const MAX_STATIC_ENTRIES = 150;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(SHELL_CACHE)
-      // addAll fails atomically; a single 404 would leave us with no shell at
-      // all, so each asset is added independently.
-      .then((cache) =>
-        Promise.allSettled(SHELL_ASSETS.map((asset) => cache.add(asset))),
-      )
-      .then(() => self.skipWaiting()),
+    (async () => {
+      const cache = await caches.open(SHELL_CACHE);
+
+      // addAll is atomic, so the optional assets are added independently: one
+      // missing icon should not cost us the whole shell.
+      await Promise.allSettled(OPTIONAL_SHELL_ASSETS.map((asset) => cache.add(asset)));
+
+      // This one is allowed to reject, and installation fails with it.
+      await cache.addAll(REQUIRED_SHELL_ASSETS);
+
+      await self.skipWaiting();
+    })(),
   );
 });
 
 self.addEventListener("activate", (event) => {
-  const keep = new Set([SHELL_CACHE, DATA_CACHE, IMAGE_CACHE]);
+  const keep = new Set([SHELL_CACHE, STATIC_CACHE, DATA_CACHE, IMAGE_CACHE]);
 
   event.waitUntil(
     caches
@@ -53,14 +78,40 @@ async function trimCache(cacheName, maxEntries) {
   await Promise.all(keys.slice(0, keys.length - maxEntries).map((key) => cache.delete(key)));
 }
 
-async function networkFirst(request, cacheName, fallbackUrl) {
-  const cache = await caches.open(cacheName);
+/**
+ * Writes to the cache without making the response wait for them, and without
+ * letting a cache failure become a network failure.
+ *
+ * `event.waitUntil` is the point: a bare `cache.put(...)` is a detached promise,
+ * and the browser is free to terminate an idle worker the moment `respondWith`
+ * settles. The write then never lands, and the next offline request finds
+ * nothing — intermittently, and only under memory pressure, which is the worst
+ * way to discover it.
+ */
+function cacheInBackground(event, cacheName, request, response, maxEntries) {
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(cacheName);
+      await cache.put(request, response);
+      if (maxEntries) await trimCache(cacheName, maxEntries);
+    })().catch(() => {
+      // Quota, storage disabled, an evicted bucket: none of it should surface
+      // to the page, which already has its response.
+    }),
+  );
+}
+
+async function networkFirst(event, cacheName, fallbackUrl) {
+  const { request } = event;
 
   try {
     const response = await fetch(request);
-    if (response.ok) cache.put(request, response.clone());
+    if (response.ok) {
+      cacheInBackground(event, cacheName, request, response.clone());
+    }
     return response;
   } catch (error) {
+    const cache = await caches.open(cacheName);
     const cached = await cache.match(request);
     if (cached) return cached;
 
@@ -73,15 +124,15 @@ async function networkFirst(request, cacheName, fallbackUrl) {
   }
 }
 
-async function cacheFirst(request, cacheName) {
+async function cacheFirst(event, cacheName, maxEntries) {
+  const { request } = event;
   const cache = await caches.open(cacheName);
   const cached = await cache.match(request);
   if (cached) return cached;
 
   const response = await fetch(request);
   if (response.ok) {
-    await cache.put(request, response.clone());
-    void trimCache(cacheName, MAX_IMAGE_ENTRIES);
+    cacheInBackground(event, cacheName, request, response.clone(), maxEntries);
   }
   return response;
 }
@@ -96,16 +147,30 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(networkFirst(request, SHELL_CACHE, "/"));
+    event.respondWith(networkFirst(event, SHELL_CACHE, "/"));
+    return;
+  }
+
+  /**
+   * The cached document is useless without the code that renders it.
+   *
+   * Precaching these by name is not possible from a static file — the chunk
+   * names are content hashes only known after a build — so they are cached as
+   * the first online visit requests them. Cache-first is safe precisely because
+   * the names are content hashes: a changed file is a changed URL, never a
+   * stale hit.
+   */
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(cacheFirst(event, STATIC_CACHE, MAX_STATIC_ENTRIES));
     return;
   }
 
   if (url.pathname.startsWith("/api/news")) {
-    event.respondWith(networkFirst(request, DATA_CACHE));
+    event.respondWith(networkFirst(event, DATA_CACHE));
     return;
   }
 
   if (request.destination === "image" || url.pathname.startsWith("/_next/image")) {
-    event.respondWith(cacheFirst(request, IMAGE_CACHE));
+    event.respondWith(cacheFirst(event, IMAGE_CACHE, MAX_IMAGE_ENTRIES));
   }
 });

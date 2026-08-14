@@ -44,6 +44,54 @@ test.describe("offline support", () => {
     await context.setOffline(false);
   });
 
+  // Regression: the worker precached the document but none of the JS, CSS or
+  // fonts that render it, so "offline support" was HTML with dead script tags.
+  // The suite missed it because a reload straight after an online visit is
+  // served from Chromium's own HTTP cache — clearing that is what makes this
+  // test actually depend on the service worker.
+  test("the shell renders offline once the HTTP cache is gone", async ({
+    page,
+    context,
+    browserName,
+  }) => {
+    test.skip(browserName !== "chromium", "needs CDP to clear the HTTP cache");
+
+    await page.goto("/");
+    await page.getByRole("article").first().waitFor();
+    await waitForServiceWorker(page);
+    await page.getByRole("article").first().waitFor();
+
+    const client = await context.newCDPSession(page);
+    await client.send("Network.clearBrowserCache");
+
+    await context.setOffline(true);
+    await page.reload();
+
+    // An article can only appear if the React bundle loaded and ran, so this
+    // asserts the scripts came from the worker — not merely the HTML.
+    await expect(page.getByRole("article").first()).toBeVisible();
+
+    await context.setOffline(false);
+  });
+
+  // Regression: cache names were pinned to a hand-maintained "v2.0.0" constant,
+  // so they only rotated when somebody remembered to edit it. A response cached
+  // by one deployment was then served to a later one whose code expected a
+  // different shape. `activate` already deleted unrecognised caches — the names
+  // simply never changed. `local` is the build id for a non-Vercel build; see
+  // next.config.ts.
+  test("caches are namespaced by deployment", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("article").first().waitFor();
+    await waitForServiceWorker(page);
+    await page.getByRole("article").first().waitFor();
+
+    const keys = await page.evaluate(() => caches.keys());
+
+    expect(keys.length).toBeGreaterThan(0);
+    expect(keys.filter((key) => !key.endsWith("-local"))).toEqual([]);
+  });
+
   test("bookmarks remain readable offline", async ({ page, context }) => {
     await page.goto("/");
     await page
