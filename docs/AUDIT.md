@@ -47,9 +47,9 @@ live deployment. See [DECISIONS.md](DECISIONS.md) for what that changed.
 | 12 | medium | Unsubscribing one consumer removes cross-tab sync for all the others | fixed |
 | 14 | medium | Bookmark revival accepts incomplete objects, permanently breaking `/bookmarks` | fixed |
 | 18 | medium | Undo is not idempotent and can destroy later changes | fixed |
-| 4 | high | The cached app shell omits the JS/CSS needed to render it | open |
-| 10 | medium | Service worker cache names are pinned to a version, so data crosses deployments | open |
-| 11 | medium | `cache.put` is not tied to the fetch event lifetime | open |
+| 4 | high | The cached app shell omits the JS/CSS needed to render it | fixed |
+| 10 | medium | Service worker cache names are pinned to a version, so data crosses deployments | fixed |
+| 11 | medium | `cache.put` is not tied to the fetch event lifetime | fixed |
 | 5 | medium | The API key travels in the outbound URL, where proxies log it | open — needs confirming GNews accepts a header |
 | 6 | medium | `pageSize` affects paging offsets but is missing from the query key | open |
 | 7 | medium | `MAX_PAGE = 10` is invented; the real cap is 1,000 articles | open — needs confirming against upstream docs |
@@ -63,12 +63,11 @@ live deployment. See [DECISIONS.md](DECISIONS.md) for what that changed.
 
 ## Working order
 
-The remaining work is grouped by what it costs the reader, not by severity
-label:
-
-- **Offline** — #4, #10, #11. All three are `public/sw.js`, and #4 makes the
-  offline mode a promise the app cannot keep.
-- **Correctness and hygiene** — #6, #9, #16, #5, #7, #13, #15, #19, #20, #17.
+What is left is correctness and hygiene: #6, #9, #16, #5, #7, #13, #15, #19,
+#20, #17. Two of them (#5, #7) are claims about the upstream API rather than
+about this code, and must be checked against GNews documentation before
+anything is changed — the audit's stated mechanism for #1 turned out to be
+wrong, and the truth was worse than the report.
 
 Every fix carries a regression test; that is the invariant in
 [../AGENTS.md](../AGENTS.md), and several of these bugs exist precisely because

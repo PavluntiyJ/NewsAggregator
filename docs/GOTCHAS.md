@@ -73,6 +73,39 @@ genuinely external one (back button, palette) that should supersede everything.
 the header badge work without a provider — and it is why `test/setup.ts` clears
 `localStorage` between tests.
 
+## Offline
+
+**The worker caches `/_next/static/` at runtime, not at install.** Chunk names
+are content hashes, so a static file in `public/` cannot list them — they are
+cached as the first online visit requests them. Cache-first is safe *because*
+they are content-hashed: a changed file is a changed URL, never a stale hit.
+Without this the worker cached the document and none of the code that renders
+it, which is offline support in name only.
+
+**Caching `/` is allowed to fail the install; the rest is not.** Optional shell
+assets go through `Promise.allSettled` so one missing icon cannot cost the whole
+shell. The document goes through `cache.addAll`, which rejects — a worker that
+activates without a shell claims the page and then has nothing to serve.
+
+**Cache names carry the build id, and `sw.js` is registered with `?v=`.** A
+service worker cannot read server environment, so the id is inlined into the
+registrar (`NEXT_PUBLIC_BUILD_ID`, set in `next.config.ts`) and read back from
+`self.location`. A hand-maintained version constant rotated only when someone
+remembered to edit it, so one deployment's cached responses were served to the
+next. `activate` already deleted unrecognised caches; the names never changed.
+
+**Cache writes go through `event.waitUntil`.** A bare `cache.put(...)` is a
+detached promise, and the browser may terminate an idle worker the moment
+`respondWith` settles — so the write never lands, intermittently and only under
+memory pressure. The write is also caught: a full quota must not turn a
+perfectly good network response into an error.
+
+**Clearing the HTTP cache is what makes the offline tests mean anything.** A
+reload straight after an online visit is served from Chromium's own cache and
+passes whatever the worker did or did not store. `e2e/offline.spec.ts` clears it
+over CDP first. That omission is the reason the suite gave a green tick to a
+worker that cached no JavaScript at all.
+
 ## Server
 
 **Rate limiting fails open on purpose.** If neither `x-forwarded-for` nor
