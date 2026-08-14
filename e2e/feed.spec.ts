@@ -56,6 +56,42 @@ test.describe("news feed", () => {
     );
   });
 
+  // Regression: the search debounce was uncancellable, so a category picked
+  // within its 350 ms window fired afterwards and navigated back to the typed
+  // term — leaving the URL, the search box and the active chip disagreeing.
+  // Only a real browser reproduces it; every unit test drove one input at a time.
+  test("a category clicked mid-typing wins over the pending search", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.getByRole("article").first()).toBeVisible();
+
+    await page.getByLabel("Search news").pressSequentially("fusion", { delay: 20 });
+
+    const science = page.getByRole("button", { name: "Science", exact: true });
+    await science.click();
+
+    // Well past the debounce: if it were still armed, it would have fired.
+    await page.waitForTimeout(800);
+
+    await expect(page).toHaveURL(/q=science/);
+    await expect(page.getByLabel("Search news")).toHaveValue("science");
+    await expect(science).toHaveAttribute("aria-pressed", "true");
+  });
+
+  // Same race against the clear button, which is the other immediate write.
+  test("clearing mid-typing is not undone by the pending search", async ({ page }) => {
+    await page.goto("/?q=quantum");
+
+    await page.getByLabel("Search news").pressSequentially("fusion", { delay: 20 });
+    await page.getByRole("button", { name: "Clear search" }).click();
+
+    await page.waitForTimeout(800);
+
+    await expect(page.getByLabel("Search news")).toHaveValue("");
+    await expect(page).not.toHaveURL(/q=fusion/);
+  });
+
   test("the feed is restored from a shared URL", async ({ page }) => {
     await page.goto("/?q=health&sort=relevance");
 

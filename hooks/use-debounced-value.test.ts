@@ -74,6 +74,50 @@ describe("useDebouncedCallback", () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  // Regression: without cancellation a search still waiting out its delay
+  // landed after the user had already cleared the box or picked a category,
+  // and navigated straight back to the term they had just replaced.
+  it("drops a pending call when cancelled", () => {
+    const spy = vi.fn();
+    const { result } = renderHook(() => useDebouncedCallback(spy, 300));
+
+    act(() => result.current("stale"));
+    act(() => result.current.cancel());
+    act(() => void vi.advanceTimersByTime(500));
+
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("stays usable after a cancellation", () => {
+    const spy = vi.fn();
+    const { result } = renderHook(() => useDebouncedCallback(spy, 300));
+
+    act(() => result.current("stale"));
+    act(() => result.current.cancel());
+    act(() => result.current("fresh"));
+    act(() => void vi.advanceTimersByTime(300));
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith("fresh");
+  });
+
+  it("cancels harmlessly when nothing is pending", () => {
+    const spy = vi.fn();
+    const { result } = renderHook(() => useDebouncedCallback(spy, 300));
+
+    expect(() => act(() => result.current.cancel())).not.toThrow();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("keeps a stable identity across renders so effects do not loop", () => {
+    const { result, rerender } = renderHook(() => useDebouncedCallback(vi.fn(), 300));
+    const first = result.current;
+
+    rerender();
+
+    expect(result.current).toBe(first);
+  });
+
   it("always invokes the latest callback", () => {
     const first = vi.fn();
     const second = vi.fn();

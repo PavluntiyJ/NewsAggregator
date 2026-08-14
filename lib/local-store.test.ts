@@ -79,6 +79,41 @@ describe("createLocalStore", () => {
     expect(listener).toHaveBeenCalled();
   });
 
+  // Regression: `onStorage` is a single function reference, so the browser
+  // deduplicated it across subscribers and the first unsubscribe unbound it for
+  // everyone. In the app that meant unmounting one article card stopped the
+  // header's bookmark count from following other tabs.
+  it("keeps syncing other tabs after one of several subscribers leaves", () => {
+    const store = createLocalStore<string[]>("k12", [], revive);
+    const staying = vi.fn();
+    const leaving = vi.fn();
+
+    store.subscribe(staying);
+    const unsubscribe = store.subscribe(leaving);
+    unsubscribe();
+
+    localStorage.setItem("k12", JSON.stringify(["from-other-tab"]));
+    window.dispatchEvent(new StorageEvent("storage", { key: "k12" }));
+
+    expect(store.getSnapshot()).toEqual(["from-other-tab"]);
+    expect(staying).toHaveBeenCalled();
+    expect(leaving).not.toHaveBeenCalled();
+  });
+
+  it("stops listening to the window once the last subscriber leaves", () => {
+    const remove = vi.spyOn(window, "removeEventListener");
+    const store = createLocalStore<string[]>("k13", [], revive);
+
+    const first = store.subscribe(() => {});
+    const second = store.subscribe(() => {});
+
+    first();
+    expect(remove).not.toHaveBeenCalledWith("storage", expect.any(Function));
+
+    second();
+    expect(remove).toHaveBeenCalledWith("storage", expect.any(Function));
+  });
+
   it("ignores storage events for unrelated keys", () => {
     const store = createLocalStore<string[]>("k9", [], revive);
     const listener = vi.fn();

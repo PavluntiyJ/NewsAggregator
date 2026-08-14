@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { parseNewsQuery, serializeNewsQuery, type NewsQuery } from "@/lib/news-query";
 import { CATEGORIES, type CategoryId } from "@/lib/types";
@@ -25,15 +25,48 @@ export function useFeedParams() {
     [searchParams],
   );
 
+  /**
+   * What we have asked the URL to become, which runs ahead of what it is.
+   *
+   * Patches merge into this rather than into the rendered `query`, because
+   * `router.replace` is asynchronous: a filter picked while a debounced search
+   * was still navigating used to merge onto the pre-search query and put the
+   * old term back, leaving the URL disagreeing with the search box.
+   */
+  const requestedRef = useRef(query);
+  /** Pushes we have issued and not yet seen commit, oldest first. */
+  const inFlightRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    const committed = serializeNewsQuery({ ...query, page: 1 }).toString();
+    const index = inFlightRef.current.indexOf(committed);
+
+    if (index === -1) {
+      // A navigation we did not start — the back button, a link, the command
+      // palette. It supersedes whatever we thought was pending.
+      requestedRef.current = query;
+      inFlightRef.current = [];
+      return;
+    }
+
+    // One of ours landing. Drop it and anything older; pushes issued after it
+    // are still in flight, and `requestedRef` already accounts for them.
+    inFlightRef.current = inFlightRef.current.slice(index + 1);
+  }, [query]);
+
   const setParams = useCallback(
     (patch: Partial<FeedParams>) => {
-      const next = serializeNewsQuery({ ...query, ...patch, page: 1 });
-      const search = next.toString();
+      const merged = { ...requestedRef.current, ...patch, page: 1 };
+      requestedRef.current = merged;
+
+      const search = serializeNewsQuery(merged).toString();
+      inFlightRef.current = [...inFlightRef.current, search];
+
       router.replace(search ? `${pathname}?${search}` : pathname, {
         scroll: false,
       });
     },
-    [pathname, query, router],
+    [pathname, router],
   );
 
   /** Which category chip should read as active, if any. */

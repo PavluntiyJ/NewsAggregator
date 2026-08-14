@@ -58,12 +58,15 @@ export function FilterBar() {
   }, 350);
 
   // Adopt changes that came from somewhere else: a category chip, the command
-  // palette, or the back button.
+  // palette, or the back button. Whatever the user had half-typed is no longer
+  // what they asked for, so a debounce still in flight is dropped rather than
+  // allowed to navigate back to it a moment later.
   useEffect(() => {
     if (query.q === lastPushedRef.current) return;
+    pushQuery.cancel();
     lastPushedRef.current = query.q;
     setValue(query.q);
-  }, [query.q]);
+  }, [query.q, pushQuery]);
 
   const nonDefaultFilters =
     (query.sort !== "publishedAt" ? 1 : 0) +
@@ -107,6 +110,7 @@ export function FilterBar() {
               aria-label="Clear search"
               className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
               onClick={() => {
+                pushQuery.cancel();
                 setValue("");
                 lastPushedRef.current = DEFAULT_QUERY;
                 setParams({ q: DEFAULT_QUERY });
@@ -180,6 +184,7 @@ export function FilterBar() {
               type="button"
               aria-pressed={isActive}
               onClick={() => {
+                pushQuery.cancel();
                 setValue(category.query);
                 lastPushedRef.current = category.query;
                 setParams({ q: category.query });

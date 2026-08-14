@@ -42,6 +42,32 @@ or a `storage` event replaces it. Parsing JSON on every call returns a fresh
 object each time, `useSyncExternalStore` sees a changed snapshot on every render,
 and React loops forever.
 
+**The `storage` listener is reference-counted.** `createLocalStore` binds
+`onStorage` when its first subscriber arrives and unbinds it when the last one
+leaves — not once per subscriber. `addEventListener` deduplicates identical
+`(type, listener)` pairs, and `onStorage` is a single closure per store, so
+N subscribers ever registered one listener while any one unsubscribe removed it
+for all of them. The symptom was oblique: unmounting a single article card
+stopped the header's bookmark badge from following other tabs.
+
+**Bookmark revival validates every field, not just the ones it reads first.**
+`localStorage` outlives the code that wrote it, so a record from an older build
+is untrusted input. Accepting a partial entry pushed the failure into
+`ArticleCard`, which reads `article.source.name` — throwing on every render of
+`/bookmarks`, and again after every reload, until storage was cleared by hand.
+
+**`useDebouncedCallback` exposes `cancel`, and callers use it.** A debounced
+write is a promise about the future, and clearing the search box or clicking a
+category revokes it. Without cancelling, the pending push lands afterwards and
+navigates back to the abandoned term. `e2e/feed.spec.ts` covers both paths;
+unit tests could not, because they drove one input at a time.
+
+**`useFeedParams` merges patches into a ref, not into `query`.** `router.replace`
+is asynchronous, so between a push and its commit `query` is stale. Merging into
+it drops whichever write came first. The hook tracks the query it has *requested*
+and the pushes still in flight, so it can tell its own navigation landing from a
+genuinely external one (back button, palette) that should supersede everything.
+
 **The stores are module-level singletons.** `bookmarksStore` and
 `searchHistoryStore` live outside React. That is what makes cross-tab sync and
 the header badge work without a provider — and it is why `test/setup.ts` clears

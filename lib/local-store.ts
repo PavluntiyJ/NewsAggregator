@@ -73,11 +73,21 @@ export function createLocalStore<T>(
       }
 
       listeners.add(listener);
-      window.addEventListener("storage", onStorage);
+      // `onStorage` is one function reference, and addEventListener deduplicates
+      // identical (type, listener) pairs — so N subscribers registered exactly
+      // one listener, and the first unsubscribe removed it for everyone. The
+      // header and every visible card share this store, so unmounting a single
+      // card silently killed cross-tab sync for the whole page. Bind to the
+      // window while at least one subscriber exists, and only then.
+      if (listeners.size === 1) {
+        window.addEventListener("storage", onStorage);
+      }
 
       return () => {
         listeners.delete(listener);
-        window.removeEventListener("storage", onStorage);
+        if (listeners.size === 0) {
+          window.removeEventListener("storage", onStorage);
+        }
       };
     },
 
