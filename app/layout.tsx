@@ -47,6 +47,9 @@ export const metadata: Metadata = {
   },
   twitter: { card: "summary_large_image" },
   appleWebApp: { capable: true, title: "The Feed", statusBarStyle: "default" },
+  // Safari ignores the manifest and reads only this link; without it,
+  // add-to-home-screen on iOS falls back to a screenshot tile.
+  icons: { apple: "/icons/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {

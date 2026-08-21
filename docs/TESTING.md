@@ -93,5 +93,12 @@ assertions still run on the reload path, which is what actually matters there.
 Both Playwright projects share one Next server, so `workers` is capped at 4
 locally and 1 in CI. Letting Playwright use every core starves the server and
 produces timing failures that look like real bugs. If you see intermittent
-failures, check worker count before suspecting the code — but check the rate
-limiter too, since that genuinely did cause cross-test interference once.
+failures, check worker count before suspecting the code.
+
+The rate limiter caused exactly that kind of cross-test interference twice, so
+it no longer applies to the suite: `RATE_LIMIT` reads an env var and
+`playwright.config.ts` sets it to 100000 for the test server. Every scenario
+shares one server and one client address, so the real limit of 60/minute was
+being spent by the suite as a whole; late tests got 429s, which render as "could
+not load the feed" and read like a product bug. The limiter's own behaviour is
+covered by `lib/server/rate-limit.test.ts`, which is where it belongs.

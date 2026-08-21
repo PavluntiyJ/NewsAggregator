@@ -14,7 +14,7 @@ type BookmarkButtonProps = {
 };
 
 export function BookmarkButton({ article, className }: BookmarkButtonProps) {
-  const { has, toggle } = useBookmarks();
+  const { has, toggle, add, remove } = useBookmarks();
   const saved = has(article.id);
 
   return (
@@ -41,7 +41,10 @@ export function BookmarkButton({ article, className }: BookmarkButtonProps) {
             description: article.title,
             action: {
               label: "Undo",
-              onClick: () => toggle(article),
+              // The inverse of what this click did, not another toggle. A toast
+              // can outlive the state it describes: toggling again after the
+              // user has already re-saved the article would delete it.
+              onClick: () => (added ? remove(article.id) : add(article)),
             },
           },
         );

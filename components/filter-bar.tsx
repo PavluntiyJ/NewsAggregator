@@ -6,9 +6,11 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -16,7 +18,15 @@ import { Input } from "@/components/ui/input";
 import { useDebouncedCallback } from "@/hooks/use-debounced-value";
 import { useFeedParams } from "@/hooks/use-feed-params";
 import { useSearchHistory } from "@/hooks/use-search-history";
-import { CATEGORIES, COUNTRIES, DEFAULT_QUERY, LANGUAGES } from "@/lib/types";
+import {
+  CATEGORIES,
+  COUNTRIES,
+  DEFAULT_QUERY,
+  LANGUAGES,
+  type Country,
+  type Language,
+  type SortOption,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const COUNTRY_LABELS: Record<string, string> = {
@@ -50,20 +60,28 @@ export function FilterBar() {
   // and overwrite characters typed while the router was updating.
   const lastPushedRef = useRef(query.q);
 
+  // Only terms the user actually typed become history entries. The empty-box
+  // fallback to DEFAULT_QUERY is a URL concern — it restores the default feed —
+  // but recording "artificial intelligence" as a *search the user made* used to
+  // plant a phantom entry in the datalist and the palette's recents forever.
   const pushQuery = useDebouncedCallback((next: string) => {
-    const trimmed = next.trim() || DEFAULT_QUERY;
-    lastPushedRef.current = trimmed;
-    setParams({ q: trimmed });
-    record(trimmed);
+    const trimmed = next.trim();
+    const term = trimmed || DEFAULT_QUERY;
+    lastPushedRef.current = term;
+    setParams({ q: term });
+    if (trimmed) record(trimmed);
   }, 350);
 
   // Adopt changes that came from somewhere else: a category chip, the command
-  // palette, or the back button.
+  // palette, or the back button. Whatever the user had half-typed is no longer
+  // what they asked for, so a debounce still in flight is dropped rather than
+  // allowed to navigate back to it a moment later.
   useEffect(() => {
     if (query.q === lastPushedRef.current) return;
+    pushQuery.cancel();
     lastPushedRef.current = query.q;
     setValue(query.q);
-  }, [query.q]);
+  }, [query.q, pushQuery]);
 
   const nonDefaultFilters =
     (query.sort !== "publishedAt" ? 1 : 0) +
@@ -88,7 +106,7 @@ export function FilterBar() {
             placeholder="Search news…"
             autoComplete="off"
             list="search-history"
-            className="pl-9 pr-9"
+            className="pl-9 pr-9 [&::-webkit-search-cancel-button]:hidden"
             onChange={(event) => {
               setValue(event.target.value);
               pushQuery(event.target.value);
@@ -107,6 +125,7 @@ export function FilterBar() {
               aria-label="Clear search"
               className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
               onClick={() => {
+                pushQuery.cancel();
                 setValue("");
                 lastPushedRef.current = DEFAULT_QUERY;
                 setParams({ q: DEFAULT_QUERY });
@@ -131,42 +150,65 @@ export function FilterBar() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-            <DropdownMenuCheckboxItem
-              checked={query.sort === "publishedAt"}
-              onSelect={() => setParams({ sort: "publishedAt" })}
+            <DropdownMenuRadioGroup
+              value={query.sort}
+              onValueChange={(value) => {
+                if (value !== query.sort) setParams({ sort: value as SortOption });
+              }}
             >
-              Newest first
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuCheckboxItem
-              checked={query.sort === "relevance"}
-              onSelect={() => setParams({ sort: "relevance" })}
-            >
-              Most relevant
-            </DropdownMenuCheckboxItem>
+              <DropdownMenuRadioItem value="publishedAt">
+                Newest first
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="relevance">
+                Most relevant
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
 
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Language</DropdownMenuLabel>
-            {LANGUAGES.map((lang) => (
-              <DropdownMenuCheckboxItem
-                key={lang}
-                checked={query.lang === lang}
-                onSelect={() => setParams({ lang })}
-              >
-                {LANGUAGE_LABELS[lang] ?? lang}
-              </DropdownMenuCheckboxItem>
-            ))}
+            <DropdownMenuRadioGroup
+              value={query.lang}
+              onValueChange={(value) => {
+                if (value !== query.lang) setParams({ lang: value as Language });
+              }}
+            >
+              {LANGUAGES.map((lang) => (
+                <DropdownMenuRadioItem key={lang} value={lang}>
+                  {LANGUAGE_LABELS[lang] ?? lang}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
 
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Country</DropdownMenuLabel>
-            {COUNTRIES.map((country) => (
-              <DropdownMenuCheckboxItem
-                key={country}
-                checked={query.country === country}
-                onSelect={() => setParams({ country })}
-              >
-                {COUNTRY_LABELS[country] ?? country}
-              </DropdownMenuCheckboxItem>
-            ))}
+            <DropdownMenuRadioGroup
+              value={query.country}
+              onValueChange={(value) => {
+                if (value !== query.country) setParams({ country: value as Country });
+              }}
+            >
+              {COUNTRIES.map((country) => (
+                <DropdownMenuRadioItem key={country} value={country}>
+                  {COUNTRY_LABELS[country] ?? country}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+
+            <DropdownMenuSeparator />
+            {/* The badge counts non-default filters, so a one-click way back
+                belongs in the same menu rather than making the user reverse
+                three radio selections from memory. */}
+            <DropdownMenuItem
+              // pl-8 matches the radio items above, whose indicator column
+              // would otherwise leave this row hanging to their left.
+              className="pl-8"
+              disabled={nonDefaultFilters === 0}
+              onSelect={() =>
+                setParams({ sort: "publishedAt", lang: "en", country: "any" })
+              }
+            >
+              Reset filters
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -180,6 +222,7 @@ export function FilterBar() {
               type="button"
               aria-pressed={isActive}
               onClick={() => {
+                pushQuery.cancel();
                 setValue(category.query);
                 lastPushedRef.current = category.query;
                 setParams({ q: category.query });

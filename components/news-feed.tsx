@@ -33,6 +33,7 @@ export function NewsFeed() {
     hasNextPage,
     fetchNextPage,
     refetch,
+    refresh,
     isRefetching,
   } = useNewsFeed(query);
 
@@ -61,8 +62,31 @@ export function NewsFeed() {
 
   const retry = useCallback(() => void refetch(), [refetch]);
 
+  // Refresh collapses the feed back to its first page, so the reader's old
+  // offset points past the end of the new list; send them to the top of the
+  // fresh headlines rather than into whatever happens to be there.
+  const refreshFeed = useCallback(() => {
+    void refresh();
+    window.scrollTo({ top: 0 });
+  }, [refresh]);
+
   const isTerminalError =
     error instanceof NewsRequestError && TERMINAL_ERROR_CODES.includes(error.code);
+
+  // A wholesale query change replaces every result, so the viewport that made
+  // sense for the old list makes none for the new one — and a sentinel left in
+  // view would immediately start paging through content the user never asked
+  // for. Filter tweaks go through the same path but only land here when the
+  // key actually differs; the initial mount is skipped by initialising the ref
+  // to the current key.
+  const feedKey = `${query.q}|${query.sort}|${query.lang}|${query.country}`;
+  const previousKeyRef = useRef(feedKey);
+
+  useEffect(() => {
+    if (previousKeyRef.current === feedKey) return;
+    previousKeyRef.current = feedKey;
+    window.scrollTo({ top: 0 });
+  }, [feedKey]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -127,6 +151,26 @@ export function NewsFeed() {
             Try a broader phrase, a different language, or pick one of the
             categories above.
           </p>
+        </div>
+      ) : null}
+
+      {status === "success" && articles.length > 0 ? (
+        <div className="flex justify-end">
+          {/* The only refetch trigger in the app: both automatic ones are off
+              because they replay every cached page. See lib/query-client.ts. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={refreshFeed}
+            disabled={isRefetching}
+          >
+            {isRefetching ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <RefreshCw className="size-4" aria-hidden="true" />
+            )}
+            Refresh
+          </Button>
         </div>
       ) : null}
 

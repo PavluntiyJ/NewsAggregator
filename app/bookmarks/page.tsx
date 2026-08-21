@@ -7,10 +7,10 @@ import { toast } from "sonner";
 
 import { ArticleCard } from "@/components/article-card";
 import { Button } from "@/components/ui/button";
-import { bookmarksStore, useBookmarks } from "@/hooks/use-bookmarks";
+import { useBookmarks } from "@/hooks/use-bookmarks";
 
 export default function BookmarksPage() {
-  const { bookmarks, clear, count } = useBookmarks();
+  const { bookmarks, clear, restore, count } = useBookmarks();
   const [confirming, setConfirming] = useState(false);
 
   return (
@@ -40,9 +40,11 @@ export default function BookmarksPage() {
                   setConfirming(false);
                   toast.message(`Removed ${removed.length} bookmarks`, {
                     action: {
-                      // Restoring the exact previous array preserves ordering.
+                      // Merged back rather than written over the top: the toast
+                      // stays up long enough to bookmark something new from
+                      // another tab, and Undo must not delete that.
                       label: "Undo",
-                      onClick: () => bookmarksStore.set(removed),
+                      onClick: () => restore(removed),
                     },
                   });
                 }}

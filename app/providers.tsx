@@ -1,29 +1,17 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { useState, type ReactNode } from "react";
 import { Toaster } from "sonner";
 
 import { CommandPaletteProvider } from "@/components/command-palette";
+import { createQueryClient } from "@/lib/query-client";
 
 export function Providers({ children }: { children: ReactNode }) {
   // Created in state so each browser session gets exactly one client, and so a
   // client is never shared between requests during SSR.
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 60_000,
-            refetchOnWindowFocus: false,
-            // The upstream free tier is 100 requests/day; refetching on every
-            // remount would spend it on nothing.
-            refetchOnMount: false,
-          },
-        },
-      }),
-  );
+  const [queryClient] = useState(() => createQueryClient());
 
   return (
     <QueryClientProvider client={queryClient}>

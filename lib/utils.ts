@@ -5,6 +5,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Both formatters are locale-fixed, and Intl construction is expensive enough
+// that doing it per call — once per card per render — shows up when the grid
+// re-renders. Hoisted so each is built exactly once.
+const dateFormatter = new Intl.DateTimeFormat("en", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+const relativeFormatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
 /** "3 hours ago" / "2 days ago", falling back to a plain date past a week. */
 export function formatRelativeTime(iso: string, now: number = Date.now()): string {
   const timestamp = Date.parse(iso);
@@ -14,14 +24,8 @@ export function formatRelativeTime(iso: string, now: number = Date.now()): strin
   const absSeconds = Math.abs(diffSeconds);
 
   if (absSeconds > 604_800) {
-    return new Intl.DateTimeFormat("en", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }).format(timestamp);
+    return dateFormatter.format(timestamp);
   }
-
-  const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
   const divisions: [number, Intl.RelativeTimeFormatUnit][] = [
     [60, "second"],
     [3600, "minute"],
@@ -42,7 +46,7 @@ export function formatRelativeTime(iso: string, now: number = Date.now()): strin
     }
   }
 
-  return formatter.format(value, unit);
+  return relativeFormatter.format(value, unit);
 }
 
 /** Deterministic hue from a string — used for article image placeholders so a

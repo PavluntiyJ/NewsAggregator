@@ -79,8 +79,8 @@ looking at before concluding something is stale.
 
 | Layer | Where | Lifetime | Purpose |
 |---|---|---|---|
-| TanStack Query | Browser memory | 60s stale, per session | Avoids refetching while the user toggles filters back and forth |
-| Service worker `DATA_CACHE` | Browser disk | Until evicted | Offline fallback only; never preferred over the network |
+| TanStack Query | Browser memory | 60s stale, per session | Avoids refetching while the user toggles filters back and forth. Never refetches on its own — see ADR-012 |
+| Service worker `DATA_CACHE` | Browser disk | Until evicted, max 30 entries | Offline fallback only; never preferred over the network |
 | CDN | Vercel edge | `s-maxage=60`, `stale-while-revalidate=600` | Absorbs concurrent visitors |
 | Next data cache | Server | `NEWS_CACHE_TTL`, default 300s | Keeps the app inside the 100 requests/day upstream quota |
 

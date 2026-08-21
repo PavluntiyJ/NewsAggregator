@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * Debounces a value.
@@ -22,6 +22,11 @@ export function useDebouncedValue<T>(value: T, delayMs = 300): T {
   return debounced;
 }
 
+export type DebouncedCallback<Args extends unknown[]> = ((...args: Args) => void) & {
+  /** Drops a pending invocation. A no-op when nothing is pending. */
+  cancel: () => void;
+};
+
 /**
  * Debounces a callback, cancelling any pending invocation on each new call and
  * on unmount.
@@ -30,11 +35,16 @@ export function useDebouncedValue<T>(value: T, delayMs = 300): T {
  * external side effect (a router push, say), because it keeps the trigger in
  * the event handler instead of creating an effect that has to be guarded
  * against feedback from the state it just wrote.
+ *
+ * `cancel` exists because a debounced write is a promise about the future that
+ * a later action can invalidate. Without it, a search still waiting out its
+ * delay would land *after* the user cleared the box or picked a category, and
+ * quietly reinstate the query they had just replaced.
  */
 export function useDebouncedCallback<Args extends unknown[]>(
   callback: (...args: Args) => void,
   delayMs = 300,
-) {
+): DebouncedCallback<Args> {
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const callbackRef = useRef(callback);
 
@@ -42,13 +52,20 @@ export function useDebouncedCallback<Args extends unknown[]>(
     callbackRef.current = callback;
   });
 
-  useEffect(() => () => clearTimeout(timerRef.current), []);
+  const cancel = useCallback(() => {
+    clearTimeout(timerRef.current);
+    timerRef.current = undefined;
+  }, []);
 
-  return useCallback(
-    (...args: Args) => {
+  useEffect(() => cancel, [cancel]);
+
+  return useMemo(() => {
+    const debounced = ((...args: Args) => {
       clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => callbackRef.current(...args), delayMs);
-    },
-    [delayMs],
-  );
+    }) as DebouncedCallback<Args>;
+
+    debounced.cancel = cancel;
+    return debounced;
+  }, [cancel, delayMs]);
 }

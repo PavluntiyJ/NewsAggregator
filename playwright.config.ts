@@ -29,6 +29,11 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
-    env: { GNEWS_API_KEY: "" },
+    env: {
+      GNEWS_API_KEY: "",
+      // Every scenario shares one server and one client address, so the
+      // per-IP limiter would start 429-ing late tests as the suite grows.
+      RATE_LIMIT: "100000",
+    },
   },
 });
