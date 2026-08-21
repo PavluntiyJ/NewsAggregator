@@ -31,7 +31,7 @@ against a different diagnosis than the one below.
 | F10 | low | UX copy | Offline banner promises cached articles the app may not have | fixed |
 | F11 | low | SEO | `summary_large_image` twitter card with no image asset anywhere | fixed |
 | F12 | low | polish | `/bookmarks` never sets the document title | fixed |
-| F13 | low | perf | Command palette ships in the initial bundle for every visitor | fixed |
+| F13 | low | perf | Command palette ships in the initial bundle for every visitor | fixed — net bundle up, see correction |
 | F14 | low | UX judgment | A new search keeps the previous scroll offset | decided — scroll to top |
 
 ---
@@ -292,6 +292,45 @@ against an element that was visible, enabled, stable, and off-screen.
 The row was not the bug; it only reached the end of a menu that had been
 overflowing since the country list was added. The content now caps itself at
 `--radix-dropdown-menu-content-available-height` and scrolls.
+
+### F13 — done as prescribed, and the bundle still grew
+
+The split works exactly as described: cmdk and Radix Dialog leave the initial
+payload and arrive on the first ⌘K. It did not make the page lighter.
+
+Measured on production builds of `9dd2116` (before the audit) and `7cb4019`
+(after), three runs each, stable to a tenth of a KB. Method: serve
+`next start`, load `/`, wait for the feed, then sum `encodedBodySize` over
+`performance.getEntriesByType("resource")` for `.js` — transferred bytes, not
+parsed size. Repeat after pressing ⌘K to price the palette separately.
+
+| | initial JS | palette on ⌘K |
+|---|---|---|
+| Before the audit | 287.8 KB | 0 — already in the bundle |
+| After | 298.6 KB | +20.1 KB on demand |
+
+**Initial JS is 10.8 KB heavier (+3.8%).** The deferred palette gives back
+20.1 KB; the rest of the pass — Radix radio groups, the reset row, the refresh
+control, the scroll effect, the banner subscription, the `next/dynamic` runtime
+— spends about 31 KB. This document's own note on F13, "modest absolute
+savings; worth doing last, if at all", turned out to be optimistic in the wrong
+direction.
+
+Nothing here is worth reverting: the added bytes buy working controls, correct
+semantics and a refresh path. But the pass should not be described as having
+made the client faster, because on the one metric that was measured, it did not.
+
+**Open follow-up.** If the weight matters, two things are worth checking before
+anything else, in this order: whether the lazy chunk duplicates Radix code that
+the main chunk already carries (a split can do that), and whether
+`@radix-ui/react-dropdown-menu` earns its size for an eighteen-row menu that a
+native control could carry. Turbopack emits hashed chunk names and Next 16 no
+longer writes `app-build-manifest.json`, so attributing bytes to modules needs
+more than the manifest — budget an hour, and measure it the same way.
+
+**What was not measured.** The F4/F8 render-work claims. Memoising the cards and
+hoisting the `Intl` formatters plainly remove main-thread work per feed-state
+flip, but no profile was taken and no number is claimed for them.
 
 ### A third thing the new tests found
 

@@ -16,6 +16,12 @@ sitting over the image. Without an explicit `z-10` the button is visible,
 focusable and completely unclickable. Anything else you place over a card needs
 the same treatment.
 
+**The command palette is lazy, and that did not shrink the page.** Splitting it
+out defers 20.1 KB to the first ⌘K, which is real, but the initial payload still
+grew 10.8 KB across the frontend audit. Do not cite the split as a bundle win
+without re-measuring — the numbers and the method are in
+[AUDIT-FRONTEND.md](AUDIT-FRONTEND.md#f13--done-as-prescribed-and-the-bundle-still-grew).
+
 **`DropdownMenuContent` caps its own height.** The filters menu is eighteen rows
 tall — sort, seven languages, nine countries, a reset. Radix does not constrain
 content height for you; without
