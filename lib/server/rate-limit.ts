@@ -4,9 +4,16 @@ type Bucket = { count: number; resetAt: number };
 
 const buckets = new Map<string, Bucket>();
 
-// Generous enough for real browsing — an initial load plus several infinite
-// scroll pages and a few filter changes all land inside one window.
-export const RATE_LIMIT = 60;
+/**
+ * Generous enough for real browsing — an initial load plus several infinite
+ * scroll pages and a few filter changes all land inside one window.
+ *
+ * Overridable because the e2e suite drives dozens of browsing sessions through
+ * one server from one address, which is exactly the shape this limiter exists
+ * to stop. Raising it there keeps the suite testing the feed instead of the
+ * limiter; the limiter's own behaviour is covered by rate-limit.test.ts.
+ */
+export const RATE_LIMIT = Number(process.env.RATE_LIMIT) || 60;
 export const RATE_WINDOW_MS = 60_000;
 
 export type RateLimitResult = {
