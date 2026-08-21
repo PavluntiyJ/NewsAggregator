@@ -1,4 +1,5 @@
 import { ArrowUpRight } from "lucide-react";
+import { memo } from "react";
 
 import { ArticleImage } from "@/components/article-image";
 import { BookmarkButton } from "@/components/bookmark-button";
@@ -10,7 +11,19 @@ type ArticleCardProps = {
   priority?: boolean;
 };
 
-export function ArticleCard({ article, priority = false }: ArticleCardProps) {
+/**
+ * Memoised because the feed re-renders the whole grid on every page append and
+ * on each flip of `isFetchingNextPage`. Card props are stable across those
+ * renders — article objects come from cached pages, so their references
+ * persist — which makes memoisation skip all of the work. Without it, an
+ * infinite feed re-reconciles every accumulated card three times per
+ * page-load, and the cost grows with scroll depth exactly where jank is most
+ * visible.
+ */
+export const ArticleCard = memo(function ArticleCard({
+  article,
+  priority = false,
+}: ArticleCardProps) {
   const sourceName = article.source.name || hostnameOf(article.url);
 
   return (
@@ -66,7 +79,7 @@ export function ArticleCard({ article, priority = false }: ArticleCardProps) {
       </div>
     </article>
   );
-}
+});
 
 export function ArticleCardSkeleton() {
   return (

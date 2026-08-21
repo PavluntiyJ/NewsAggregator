@@ -40,6 +40,13 @@ const OPTIONAL_SHELL_ASSETS = ["/bookmarks", "/icons/icon.svg"];
 
 const MAX_IMAGE_ENTRIES = 60;
 const MAX_STATIC_ENTRIES = 150;
+/**
+ * News responses are keyed by their full query string, so every search term,
+ * language, country, sort and pageSize combination is its own entry. Without a
+ * cap a curious searcher accumulates responses for URLs they will never ask
+ * for again; 30 comfortably covers a browsing session's active views.
+ */
+const MAX_DATA_ENTRIES = 30;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -101,13 +108,13 @@ function cacheInBackground(event, cacheName, request, response, maxEntries) {
   );
 }
 
-async function networkFirst(event, cacheName, fallbackUrl) {
+async function networkFirst(event, cacheName, fallbackUrl, maxEntries) {
   const { request } = event;
 
   try {
     const response = await fetch(request);
     if (response.ok) {
-      cacheInBackground(event, cacheName, request, response.clone());
+      cacheInBackground(event, cacheName, request, response.clone(), maxEntries);
     }
     return response;
   } catch (error) {
@@ -166,7 +173,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.pathname.startsWith("/api/news")) {
-    event.respondWith(networkFirst(event, DATA_CACHE));
+    event.respondWith(networkFirst(event, DATA_CACHE, undefined, MAX_DATA_ENTRIES));
     return;
   }
 
