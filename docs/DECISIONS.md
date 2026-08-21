@@ -195,3 +195,33 @@ gradient plus a glyph when an image is missing or fails to load.
 placeholder was a relative path that broke on nested routes and could loop if the
 fallback 404'd. The hue derives from the article id, so a given article always
 looks the same and a grid of them stays distinguishable.
+
+---
+
+## ADR-012 — The feed refreshes on request, never on its own
+
+**Decision.** `refetchOnMount` and `refetchOnWindowFocus` are both off. The only
+refetch trigger in the app is a Refresh button, wired to `useNewsFeed.refresh()`,
+which trims the cached pages to the first one before refetching.
+
+**Rejected.** TanStack's defaults, which refetch a stale query whenever a
+component remounts or the window regains focus.
+
+**Consequences.** Automatic refetching is priced per *page*, not per query:
+TanStack replays every cached page of an infinite query, so a reader eight pages
+deep costs eight upstream requests per trigger against a free tier of a hundred
+a day. `maxPages` is the only built-in lever and it works by discarding pages,
+which on this UI means already rendered cards vanishing off the top of the grid
+mid-scroll. Trimming to page one at the moment the reader asks for fresh news is
+both cheaper and more honest about what "refresh" means for a feed — new
+articles shift every offset anyway, so replaying old page numbers refetches
+positions, not content.
+
+Nobody is stranded on stale headlines by this. The QueryClient is created in
+`useState` and never persisted, so a new tab always starts empty and fetches;
+within a session the button is the path, and it returns the reader to the top
+because the list beneath them has been replaced.
+
+The cost is a tab left open for hours showing hours-old headlines until someone
+presses Refresh. That is the trade the quota buys, and it is visible to the
+reader rather than silent.

@@ -16,6 +16,14 @@ sitting over the image. Without an explicit `z-10` the button is visible,
 focusable and completely unclickable. Anything else you place over a card needs
 the same treatment.
 
+**`DropdownMenuContent` caps its own height.** The filters menu is eighteen rows
+tall — sort, seven languages, nine countries, a reset. Radix does not constrain
+content height for you; without
+`max-h-[var(--radix-dropdown-menu-content-available-height)]` the menu runs off
+the bottom of the viewport and its last rows cannot be clicked on a phone at
+all, while still reporting as visible, enabled and stable. Do not swap that cap
+back for `overflow-hidden`.
+
 **cmdk's dialog needs `contentClassName`, not `className`.** `Command.Dialog`
 nests `Command` inside Radix's `Dialog.Content`. Positioning classes on
 `className` land on the inner element; because that element is `fixed`, the
@@ -35,6 +43,14 @@ SSR. `<html>` carries `suppressHydrationWarning` because next-themes writes the
 class before React hydrates — that is the mechanism, not a papered-over bug.
 
 ## State
+
+**Refetching an infinite query replays every cached page.** `refetch()` on the
+feed costs one upstream request per page the reader has scrolled, against a free
+tier of a hundred a day — which is why both `refetchOnMount` and
+`refetchOnWindowFocus` are off in `lib/query-client.ts` and why the Refresh
+button calls `useNewsFeed.refresh()` rather than `refetch()` directly. `refresh`
+trims the cache to the first page before refetching. Wiring the button straight
+to `refetch` looks equivalent and is not.
 
 **`getSnapshot` must return a cached reference.** `lib/local-store.ts` keeps the
 parsed value in a module-level variable and returns the same object until a write
@@ -74,6 +90,13 @@ the header badge work without a provider — and it is why `test/setup.ts` clear
 `localStorage` between tests.
 
 ## Offline
+
+**The service-worker controller arrives after the first paint.** `sw.js` calls
+`clients.claim()` on activate, so on a first visit `navigator.serviceWorker.controller`
+is null when `OfflineBanner` mounts and non-null a moment later. Reading it once
+in an effect told readers whose feed really was cached to "reconnect to load the
+news". It is a `useSyncExternalStore` subscription on `controllerchange` for
+that reason, not for tidiness.
 
 **The worker caches `/_next/static/` at runtime, not at install.** Chunk names
 are content hashes, so a static file in `public/` cannot list them — they are

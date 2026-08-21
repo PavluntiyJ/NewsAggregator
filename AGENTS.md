@@ -46,6 +46,7 @@ the e2e suite caught them.
 | Adding or fixing tests, or touching fixtures | [docs/TESTING.md](docs/TESTING.md) |
 | Debugging something that "should work" | [docs/GOTCHAS.md](docs/GOTCHAS.md) |
 | Picking up known outstanding defects | [docs/AUDIT.md](docs/AUDIT.md) |
+| Picking up known frontend, UI/UX or performance defects | [docs/AUDIT-FRONTEND.md](docs/AUDIT-FRONTEND.md) |
 | Explaining the project to a human | [README.md](README.md) |
 
 Read the routed document before editing, not after something breaks. Each one is
